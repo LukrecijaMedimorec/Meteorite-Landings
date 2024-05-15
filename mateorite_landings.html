@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Meteorite Landings Map</title>
+    <style>
+      body {
+        background-color: rgb(8, 33, 42);
+        margin: 0;
+        padding: 0;
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        height: 100vh;
+      }
+
+      #map-container {
+        display: flex;
+        margin-top: 20px;
+        margin-bottom: 20px;
+      }
+
+      #map {
+        width: 90%; /* Adjusted width */
+        height: 90vh; /* Adjusted height */
+        margin-left: 0; /* Moved to the left */
+        margin-right: 10px;
+      }
+
+      #card-and-chart-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      #meteorite-card {
+        width: 350px;
+        background: rgba(69, 123, 162, 0.13);
+        border-radius: 16px;
+        box-shadow: 4px 4px 30px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(5.1px);
+        -webkit-backdrop-filter: blur(5.1px);
+        padding: 20px;
+        color: #dfd583;
+        margin-bottom: 20px;
+      }
+
+      #meteorite-card p {
+        margin: 10px 0;
+        color: #b8ae68;
+      }
+
+      #meteorite-card strong {
+        font-weight: bold;
+      }
+
+      #meteorite-chart {
+        width: 350px;
+        background: rgba(69, 123, 162, 0.13);
+        border-radius: 16px;
+        box-shadow: 4px 4px 30px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(5.1px);
+        -webkit-backdrop-filter: blur(5.1px);
+        padding: 20px;
+        color: #dfd583;
+      }
+
+      .bar {
+        fill: rgb(70, 95, 116);
+      }
+
+      .bar text {
+        font-size: 12px;
+        fill: white;
+        text-anchor: middle;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map-container">
+      <svg id="map"></svg>
+      <div id="card-and-chart-container">
+        <div id="meteorite-card">
+          <h2>Meteorite Details</h2>
+          <p>
+            <strong>Name:</strong>
+            <span id="meteorite-name">Meteorite not selected</span>
+          </p>
+          <p><strong>Year:</strong> <span id="meteorite-year">-</span></p>
+          <p><strong>Mass [g]:</strong> <span id="meteorite-mass">-</span></p>
+          <p><strong>Class:</strong> <span id="meteorite-class">-</span></p>
+        </div>
+        <div id="meteorite-chart"></div>
+      </div>
+    </div>
+
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script>
+      const width = 1000; // Adjusted width
+      const height = 800; // Adjusted height
+
+      const svg = d3.select("#map").attr("width", width).attr("height", height);
+
+      const projection = d3
+        .geoNaturalEarth1()
+        .scale(200)
+        .translate([width / 2, height / 2]);
+
+      const path = d3.geoPath().projection(projection);
+
+      d3.json("./datasheets/world_map.json").then(function (world) {
+        svg
+          .selectAll("path")
+          .data(world.features)
+          .enter()
+          .append("path")
+          .attr("d", path)
+          .attr("fill", "rgb(136, 172, 155)")
+          .attr("stroke", "rgb(95, 110, 125)");
+
+        d3.csv("./datasheets/meteorite_landings_cleaned.csv").then(function (
+          data
+        ) {
+          data.forEach(function (d) {
+            const circle = document.createElementNS(
+              "http://www.w3.org/2000/svg",
+              "circle"
+            );
+            const coordinates = projection([+d.reclong, +d.reclat]);
+            circle.setAttribute("cx", coordinates[0]);
+            circle.setAttribute("cy", coordinates[1]);
+            circle.setAttribute("r", 2.5);
+            circle.setAttribute("fill", "rgb(255, 249, 85)");
+            circle.addEventListener("click", function () {
+              console.log("Clicked Meteorite Data:", d);
+              document.getElementById("meteorite-card").style.display = "block";
+              document.getElementById("meteorite-name").innerText = d.name;
+              document.getElementById("meteorite-year").innerText = parseInt(
+                d.year,
+                10
+              );
+              document.getElementById("meteorite-mass").innerText = d.mass;
+              document.getElementById("meteorite-class").innerText = d.recclass;
+            });
+            svg.node().appendChild(circle);
+          });
+        });
+
+        d3.csv("./datasheets/meteorite_landings_cleaned.csv").then(function (
+          data
+        ) {
+          const yearCounts = {};
+
+          data.forEach(function (d) {
+            const year = parseInt(d.year, 10);
+            yearCounts[year] = (yearCounts[year] || 0) + 1;
+          });
+
+          const yearCountsArray = Object.entries(yearCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+
+          const x = d3
+            .scaleBand()
+            .domain(yearCountsArray.map((d) => d[0]))
+            .range([0, 350])
+            .padding(0.1);
+
+          const y = d3
+            .scaleLinear()
+            .domain([0, d3.max(yearCountsArray, (d) => d[1])])
+            .nice()
+            .range([0, 350]);
+
+          const chart = d3.select("#meteorite-chart");
+
+          const bars = chart
+            .selectAll(".bar")
+            .data(yearCountsArray)
+            .enter()
+            .append("div")
+            .classed("bar", true)
+            .style("display", "inline-block")
+            .style("margin", "5px")
+            .style("position", "relative");
+
+          // Append the bar
+          bars
+            .append("div")
+            .style("width", "60px")
+            .style("height", (d) => y(d[1]) + "px")
+            .style("background-color", "rgb(70, 95, 116)")
+            .style("position", "relative"); // position relative for positioning text absolutely
+
+          // Append text showing year under the bar
+          bars
+            .append("div")
+            .style("text-align", "center")
+            .style("position", "absolute")
+            .style("bottom", "-20px") // Adjust vertical position
+            .style("left", "0")
+            .style("right", "0")
+            .text((d) => d[0]);
+
+          // Append hover text showing the number of meteorites inside the bar
+          bars
+            .append("div")
+            .classed("hover-text", true)
+            .style("position", "absolute")
+            .style("top", "50%")
+            .style("left", "0")
+            .style("right", "0")
+            .style("text-align", "center")
+            .style("transform", "translateY(-50%)") // Center vertically
+            .style("color", "white") // Text color
+            .style("font-size", "12px") // Font size
+            .style("opacity", 0) // Initially hide the text
+            .text((d) => d[1])
+            .style("pointer-events", "none");
+
+          // Add hover event listeners
+          bars
+            .on("mouseover", function () {
+              d3.select(this).select(".hover-text").style("opacity", 1); // Show the text on hover
+            })
+            .on("mouseout", function () {
+              d3.select(this).select(".hover-text").style("opacity", 0); // Hide the text on mouseout
+            });
+        });
+      });
+    </script>
+  </body>
+</html>
