@@ -16,16 +16,22 @@
         height: 100vh;
       }
 
+      #visual-title {
+        color: #dfd583;
+        text-align: center;
+        font-size: 40px;
+      }
+
       #map-container {
         display: flex;
         margin-top: 20px;
-        margin-bottom: 20px;
+        margin-bottom: 0px;
       }
 
       #map {
-        width: 90%; /* Adjusted width */
-        height: 90vh; /* Adjusted height */
-        margin-left: 0; /* Moved to the left */
+        width: 90%;
+        height: 90vh;
+        margin-left: 0;
         margin-right: 10px;
       }
 
@@ -33,6 +39,7 @@
         display: flex;
         flex-direction: column;
         align-items: center;
+        padding-top: 20px;
       }
 
       #meteorite-card {
@@ -70,12 +77,12 @@
 
       .bar {
         fill: #465f74;
-        cursor: pointer; /* Add cursor pointer to indicate clickability */
+        cursor: pointer;
       }
 
-      .bar text {
+      .bar .hover-text {
         font-size: 12px;
-        fill: white;
+        color: #cec794;
         text-anchor: middle;
       }
 
@@ -95,15 +102,38 @@
         text-decoration: none;
       }
       button:hover {
-        background-color: #457ba2;
+        background-color: #465f74;
       }
       button {
         position: relative;
         top: 1px;
       }
+
+      .card {
+        width: 200px;
+        padding: 10px;
+        margin: 10px;
+        background-color: rgba(69, 123, 162, 0.13);
+        border-radius: 16px;
+        box-shadow: 4px 4px 30px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(5.1px);
+        -webkit-backdrop-filter: blur(5.1px);
+        color: #dfd583;
+      }
+
+      #top-classes-container {
+        text-align: center;
+        margin-top: 0px;
+      }
+
+      #top-classes-container h2 {
+        text-align: center;
+        color: #dfd583;
+      }
     </style>
   </head>
   <body>
+    <h1 id="visual-title">Meteorite landings</h1>
     <div id="map-container">
       <svg id="map"></svg>
       <div id="card-and-chart-container">
@@ -122,12 +152,15 @@
       </div>
     </div>
 
-    <div id="circle-count">-</div>
+    <div id="top-classes-container">
+      <h2>Most common meteorite classes</h2>
+      <div id="top-classes" style="display: flex"></div>
+    </div>
 
     <script src="https://d3js.org/d3.v6.min.js"></script>
     <script>
-      const width = 1000; // Adjusted width
-      const height = 800; // Adjusted height
+      const width = 1000;
+      const height = 800;
 
       const svg = d3.select("#map").attr("width", width).attr("height", height);
 
@@ -214,25 +247,22 @@
             .style("margin", "5px")
             .style("position", "relative");
 
-          // Append the bar
           bars
             .append("div")
             .style("width", "60px")
             .style("height", (d) => y(d[1]) + "px")
             .style("background-color", "rgb(70, 95, 116)")
-            .style("position", "relative"); // position relative for positioning text absolutely
+            .style("position", "relative");
 
-          // Append text showing year under the bar
           bars
             .append("div")
             .style("text-align", "center")
             .style("position", "absolute")
-            .style("bottom", "-20px") // Adjust vertical position
+            .style("bottom", "-20px")
             .style("left", "0")
             .style("right", "0")
             .text((d) => d[0]);
 
-          // Append hover text showing the number of meteorites inside the bar
           bars
             .append("div")
             .classed("hover-text", true)
@@ -241,31 +271,27 @@
             .style("left", "0")
             .style("right", "0")
             .style("text-align", "center")
-            .style("transform", "translateY(-50%)") // Center vertically
-            .style("color", "white") // Text color
-            .style("font-size", "12px") // Font size
-            .style("opacity", 0) // Initially hide the text
+            .style("transform", "translateY(-50%)")
+            //.style("color", "rgba(69, 123, 162, 0.129)")
+            .style("font-size", "12px")
+            .style("opacity", 0)
             .text((d) => d[1])
             .style("pointer-events", "none");
 
-          // Add hover event listeners
           bars
             .on("mouseover", function () {
-              d3.select(this).select(".hover-text").style("opacity", 1); // Show the text on hover
+              d3.select(this).select(".hover-text").style("opacity", 1);
             })
             .on("mouseout", function () {
-              d3.select(this).select(".hover-text").style("opacity", 0); // Hide the text on mouseout
+              d3.select(this).select(".hover-text").style("opacity", 0);
             })
             .on("click", function (event, d) {
-              // Filter map data based on the clicked year
               const filteredData = data.filter(
                 (item) => parseInt(item.year) === parseInt(d[0], 10)
               );
 
-              // Remove existing circles from the map
               svg.selectAll("circle").remove();
 
-              // Add new circles for the filtered data
               filteredData.forEach(function (d) {
                 const circle = document.createElementNS(
                   "http://www.w3.org/2000/svg",
@@ -296,10 +322,8 @@
       document
         .getElementById("reset-map-button")
         .addEventListener("click", function () {
-          // Remove existing circles from the map
           d3.select("#map").selectAll("circle").remove();
 
-          // Reload all meteorite locations on the map
           d3.csv("./datasheets/meteorite_landings_cleaned.csv").then(function (
             data
           ) {
@@ -330,6 +354,45 @@
             });
           });
         });
+
+      d3.csv("./datasheets/meteorite_landings_cleaned.csv").then(function (
+        data
+      ) {
+        // Object to hold counts for recclasses
+        const classCounts = {};
+
+        data.forEach(function (d) {
+          // Count occurrences of recclasses
+          const classes = d.recclass.split(", ");
+          classes.forEach(function (cls) {
+            classCounts[cls] = (classCounts[cls] || 0) + 1;
+          });
+        });
+
+        // Sort and get top 5 recclasses
+        const topClassesArray = Object.entries(classCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5);
+
+        // Append top classes to the container
+        const topClassesContainer = d3.select("#top-classes");
+        topClassesArray.forEach(function (d) {
+          const card = topClassesContainer.append("div").classed("card", true);
+
+          card
+            .append("h3")
+            .style("text-align", "center")
+            .style("font-size", "35px")
+            .text(d[0]);
+
+          card
+            .append("p")
+            .style("text-align", "center")
+            .style("font-size", "18px")
+            .style("opacity", "0.5")
+            .text(d[1]);
+        });
+      });
     </script>
   </body>
 </html>
