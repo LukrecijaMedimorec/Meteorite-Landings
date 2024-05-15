@@ -130,6 +130,12 @@
         text-align: center;
         color: #dfd583;
       }
+
+      #chart-container {
+        margin-top: 30px;
+        margin-bottom: 20px;
+        padding-bottom: 50px;
+      }
     </style>
   </head>
   <body>
@@ -156,6 +162,8 @@
       <h2>Most common meteorite classes</h2>
       <div id="top-classes" style="display: flex"></div>
     </div>
+
+    <div id="chart-container"></div>
 
     <script src="https://d3js.org/d3.v6.min.js"></script>
     <script>
@@ -358,23 +366,19 @@
       d3.csv("./datasheets/meteorite_landings_cleaned.csv").then(function (
         data
       ) {
-        // Object to hold counts for recclasses
         const classCounts = {};
 
         data.forEach(function (d) {
-          // Count occurrences of recclasses
           const classes = d.recclass.split(", ");
           classes.forEach(function (cls) {
             classCounts[cls] = (classCounts[cls] || 0) + 1;
           });
         });
 
-        // Sort and get top 5 recclasses
         const topClassesArray = Object.entries(classCounts)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 5);
 
-        // Append top classes to the container
         const topClassesContainer = d3.select("#top-classes");
         topClassesArray.forEach(function (d) {
           const card = topClassesContainer.append("div").classed("card", true);
@@ -392,6 +396,115 @@
             .style("opacity", "0.5")
             .text(d[1]);
         });
+      });
+
+      const chart_width = 800;
+      const chart_height = 600;
+
+      d3.csv("./datasheets/meteorite_landings_cleaned.csv").then(function (
+        data
+      ) {
+        const classCountsByYear = {};
+
+        data.forEach(function (d) {
+          const year = parseInt(d.year, 10);
+          const classes = d.recclass.split(", ");
+
+          classes.forEach(function (cls) {
+            if (!classCountsByYear[cls]) {
+              classCountsByYear[cls] = {};
+            }
+            classCountsByYear[cls][year] =
+              (classCountsByYear[cls][year] || 0) + 1;
+          });
+        });
+
+        const topFiveClasses = Object.entries(classCountsByYear)
+          .sort(([, aCounts], [, bCounts]) => {
+            const aTotal = Object.values(aCounts).reduce(
+              (acc, val) => acc + val,
+              0
+            );
+            const bTotal = Object.values(bCounts).reduce(
+              (acc, val) => acc + val,
+              0
+            );
+            return bTotal - aTotal;
+          })
+          .slice(0, 5)
+          .map(([cls]) => cls);
+
+        const trendData = topFiveClasses.map((cls) => {
+          const classData = classCountsByYear[cls];
+          return Object.entries(classData).map(([year, count]) => ({
+            year: +year,
+            count,
+          }));
+        });
+
+        const xScale = d3
+          .scaleLinear()
+          .domain([
+            1900,
+            //d3.min(trendData, (data) => d3.min(data, (d) => d.year)),
+            d3.max(trendData, (data) => d3.max(data, (d) => d.year)),
+          ])
+          .range([0, chart_width]);
+
+        const yScale = d3
+          .scaleLinear()
+          .domain([
+            0,
+            d3.max(trendData, (data) => d3.max(data, (d) => d.count)),
+          ])
+          .range([chart_height, 0]);
+
+        const line = d3
+          .line()
+          .x((d) => xScale(d.year))
+          .y((d) => yScale(d.count));
+
+        const svg = d3
+          .select("#chart-container")
+          .append("svg")
+          .attr("width", chart_width)
+          .attr("height", chart_height);
+
+        svg
+          .selectAll(".line")
+          .data(trendData)
+          .enter()
+          .append("path")
+          .attr("class", "line")
+          .attr("fill", "none")
+          .attr("stroke", (_, i) => d3.schemeCategory10[i % 10])
+          .attr("stroke-width", 2)
+          .attr("d", line);
+
+        svg
+          .append("g")
+          .attr("transform", "translate(0," + chart_height + ")")
+          .call(d3.axisBottom(xScale).ticks(10));
+
+        svg.append("g").call(d3.axisLeft(yScale));
+
+        svg
+          .append("text")
+          .attr("x", chart_width / 2)
+          .attr("y", chart_height - 50)
+          .style("text-anchor", "middle")
+          .style("font-size", "14px")
+          .style("fill", "black")
+          .text("Year");
+
+        svg
+          .append("text")
+          .attr("transform", "rotate(-90)")
+          .attr("y", 0)
+          .attr("x", 0 - chart_height / 2)
+          .attr("dy", "1em")
+          .style("text-anchor", "middle")
+          .text("Count");
       });
     </script>
   </body>
