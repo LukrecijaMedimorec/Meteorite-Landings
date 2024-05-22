@@ -47,8 +47,6 @@
         background: #457ba221;
         border-radius: 16px;
         box-shadow: 4px 4px 30px rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(5.1px);
-        -webkit-backdrop-filter: blur(5.1px);
         padding: 20px;
         padding-top: 10px;
         color: #dfd583;
@@ -69,9 +67,8 @@
         background: #457ba221;
         border-radius: 16px;
         box-shadow: 4px 4px 30px rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(5.1px);
-        -webkit-backdrop-filter: blur(5.1px);
         padding: 20px;
+        padding-top: 5px;
         color: #dfd583;
       }
 
@@ -87,6 +84,8 @@
       }
 
       button {
+        position: relative;
+        top: 1px;
         margin-top: 20px;
         box-shadow: 4px 4px 9px 0px #000000;
         background-color: #457ba221;
@@ -104,10 +103,6 @@
       button:hover {
         background-color: #465f74;
       }
-      button {
-        position: relative;
-        top: 1px;
-      }
 
       .card {
         width: 200px;
@@ -116,8 +111,6 @@
         background-color: rgba(69, 123, 162, 0.13);
         border-radius: 16px;
         box-shadow: 4px 4px 30px rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(5.1px);
-        -webkit-backdrop-filter: blur(5.1px);
         color: #dfd583;
       }
 
@@ -131,10 +124,29 @@
         color: #dfd583;
       }
 
-      #chart-container {
+      #trend-chart {
         margin-top: 30px;
         margin-bottom: 20px;
         padding-bottom: 50px;
+      }
+
+      .line {
+        fill: none;
+        stroke-width: 2px;
+      }
+
+      .hover-box {
+        position: absolute;
+        background: rgba(70, 95, 116, 0.1);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(12.4px);
+        -webkit-backdrop-filter: blur(12.4px);
+        border: 1px solid rgba(70, 95, 116, 0.22);
+        padding: 5px;
+        border-radius: 5px;
+        color: #7d97ac;
+        pointer-events: none;
+        display: none;
       }
     </style>
   </head>
@@ -153,7 +165,9 @@
           <p><strong>Mass [g]:</strong> <span id="meteorite-mass">-</span></p>
           <p><strong>Class:</strong> <span id="meteorite-class">-</span></p>
         </div>
-        <div id="meteorite-chart"></div>
+        <div id="meteorite-chart">
+          <h2>Years with most landings</h2>
+        </div>
         <button id="reset-map-button">Reset Map</button>
       </div>
     </div>
@@ -161,9 +175,8 @@
     <div id="top-classes-container">
       <h2>Most common meteorite classes</h2>
       <div id="top-classes" style="display: flex"></div>
+      <div id="trend-chart"></div>
     </div>
-
-    <div id="chart-container"></div>
 
     <script src="https://d3js.org/d3.v6.min.js"></script>
     <script>
@@ -396,115 +409,114 @@
             .style("opacity", "0.5")
             .text(d[1]);
         });
-      });
 
-      const chart_width = 800;
-      const chart_height = 600;
+        // Trend chart
+        const margin = { top: 10, right: 30, bottom: 30, left: 60 };
+        const trendWidth = 900 - margin.left - margin.right;
+        const trendHeight = 600 - margin.top - margin.bottom;
 
-      d3.csv("./datasheets/meteorite_landings_cleaned.csv").then(function (
-        data
-      ) {
-        const classCountsByYear = {};
+        const trendSvg = d3
+          .select("#trend-chart")
+          .append("svg")
+          .attr("width", trendWidth + margin.left + margin.right)
+          .attr("height", trendHeight + margin.top + margin.bottom)
+          .append("g")
+          .attr(
+            "transform",
+            "translate(" + margin.left + "," + margin.top + ")"
+          );
+
+        const classYears = {};
+        topClassesArray.forEach(([cls]) => {
+          classYears[cls] = {};
+        });
 
         data.forEach(function (d) {
           const year = parseInt(d.year, 10);
-          const classes = d.recclass.split(", ");
-
-          classes.forEach(function (cls) {
-            if (!classCountsByYear[cls]) {
-              classCountsByYear[cls] = {};
+          if (year >= 1900) {
+            const cls = d.recclass;
+            if (classYears[cls]) {
+              classYears[cls][year] = (classYears[cls][year] || 0) + 1;
             }
-            classCountsByYear[cls][year] =
-              (classCountsByYear[cls][year] || 0) + 1;
-          });
+          }
         });
 
-        const topFiveClasses = Object.entries(classCountsByYear)
-          .sort(([, aCounts], [, bCounts]) => {
-            const aTotal = Object.values(aCounts).reduce(
-              (acc, val) => acc + val,
-              0
-            );
-            const bTotal = Object.values(bCounts).reduce(
-              (acc, val) => acc + val,
-              0
-            );
-            return bTotal - aTotal;
-          })
-          .slice(0, 5)
-          .map(([cls]) => cls);
-
-        const trendData = topFiveClasses.map((cls) => {
-          const classData = classCountsByYear[cls];
-          return Object.entries(classData).map(([year, count]) => ({
-            year: +year,
-            count,
-          }));
+        const years = d3.range(1900, new Date().getFullYear() + 1);
+        const classTrends = Object.entries(classYears).map(([cls, counts]) => {
+          return {
+            class: cls,
+            values: years.map((year) => ({
+              year,
+              count: counts[year] || 0,
+            })),
+          };
         });
 
         const xScale = d3
           .scaleLinear()
-          .domain([
-            1900,
-            //d3.min(trendData, (data) => d3.min(data, (d) => d.year)),
-            d3.max(trendData, (data) => d3.max(data, (d) => d.year)),
-          ])
-          .range([0, chart_width]);
+          .domain([1900, 2012])
+          .range([0, trendWidth]);
 
         const yScale = d3
           .scaleLinear()
           .domain([
             0,
-            d3.max(trendData, (data) => d3.max(data, (d) => d.count)),
+            d3.max(classTrends, (d) => d3.max(d.values, (v) => v.count)),
           ])
-          .range([chart_height, 0]);
+          .range([trendHeight, 0]);
+
+        const xAxis = trendSvg
+          .append("g")
+          .attr("transform", "translate(0," + trendHeight + ")")
+          .call(d3.axisBottom(xScale).tickFormat(d3.format("d")))
+          .call((g) => g.select(".domain").attr("stroke", "#7d97ac"))
+          .call((g) => g.selectAll(".tick line").attr("stroke", "#7d97ac"))
+          .call((g) => g.selectAll(".tick text").attr("fill", "#7d97ac"));
+
+        const yAxis = trendSvg
+          .append("g")
+          .call(d3.axisLeft(yScale))
+          .call((g) => g.select(".domain").attr("stroke", "#7d97ac"))
+          .call((g) => g.selectAll(".tick line").attr("stroke", "#7d97ac"))
+          .call((g) => g.selectAll(".tick text").attr("fill", "#7d97ac"));
 
         const line = d3
           .line()
           .x((d) => xScale(d.year))
           .y((d) => yScale(d.count));
 
-        const svg = d3
-          .select("#chart-container")
-          .append("svg")
-          .attr("width", chart_width)
-          .attr("height", chart_height);
+        const color = d3.scaleOrdinal(d3.schemeCategory10);
 
-        svg
+        trendSvg
           .selectAll(".line")
-          .data(trendData)
+          .data(classTrends)
           .enter()
           .append("path")
           .attr("class", "line")
-          .attr("fill", "none")
-          .attr("stroke", (_, i) => d3.schemeCategory10[i % 10])
-          .attr("stroke-width", 2)
-          .attr("d", line);
+          .attr("d", (d) => line(d.values))
+          .style("stroke", (d) => color(d.class));
 
-        svg
-          .append("g")
-          .attr("transform", "translate(0," + chart_height + ")")
-          .call(d3.axisBottom(xScale).ticks(10));
+        const hoverBox = d3
+          .select("body")
+          .append("div")
+          .attr("class", "hover-box");
 
-        svg.append("g").call(d3.axisLeft(yScale));
+        trendSvg
+          .selectAll(".line")
+          .on("mousemove", function (event, d) {
+            const [x, y] = d3.pointer(event);
+            const year = Math.round(xScale.invert(x));
+            const count = d.values.find((v) => v.year === year).count;
 
-        svg
-          .append("text")
-          .attr("x", chart_width / 2)
-          .attr("y", chart_height - 50)
-          .style("text-anchor", "middle")
-          .style("font-size", "14px")
-          .style("fill", "black")
-          .text("Year");
-
-        svg
-          .append("text")
-          .attr("transform", "rotate(-90)")
-          .attr("y", 0)
-          .attr("x", 0 - chart_height / 2)
-          .attr("dy", "1em")
-          .style("text-anchor", "middle")
-          .text("Count");
+            hoverBox
+              .style("display", "block")
+              .style("left", event.pageX + "px")
+              .style("top", event.pageY - 40 + "px")
+              .html(`Year: ${year}<br>Count: ${count}`);
+          })
+          .on("mouseout", function () {
+            hoverBox.style("display", "none");
+          });
       });
     </script>
   </body>
