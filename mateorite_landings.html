@@ -293,7 +293,6 @@
             .style("right", "0")
             .style("text-align", "center")
             .style("transform", "translateY(-50%)")
-            //.style("color", "rgba(69, 123, 162, 0.129)")
             .style("font-size", "12px")
             .style("opacity", 0)
             .text((d) => d[1])
@@ -410,7 +409,6 @@
             .text(d[1]);
         });
 
-        // Trend chart
         const margin = { top: 10, right: 30, bottom: 30, left: 60 };
         const trendWidth = 900 - margin.left - margin.right;
         const trendHeight = 600 - margin.top - margin.bottom;
@@ -512,7 +510,9 @@
               .style("display", "block")
               .style("left", event.pageX + "px")
               .style("top", event.pageY - 40 + "px")
-              .html(`Year: ${year}<br>Count: ${count}`);
+              .html(
+                `<strong>${d.class}</strong> <br>Year: ${year}<br>Count: ${count}`
+              );
           })
           .on("mouseout", function () {
             hoverBox.style("display", "none");
